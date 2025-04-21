@@ -35,8 +35,6 @@ from optimizer_modules import OptimizerModule
 from torch import Tensor
 from torch.autograd import profiler
 
-import reed_solomon as rs
-
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -503,10 +501,6 @@ class BaseShampooPreconditionerList(
             preconditioned_dims_selector_list=preconditioned_dims_selector_list,
         )
 
-        # Initialize container for storing gathered peer state.
-        # This will be keyed by rank and hold the state from every other node on the fabric.
-        self._gathered_peer_preconditioner_states: dict[int, dict] = {}
-
     @abstractmethod
     def _create_preconditioned_dims_selector(
         self, dims: torch.Size
@@ -750,7 +744,7 @@ class BaseShampooPreconditionerList(
             # In Shampoo, this is equivalent to computing the inverse factor matrix.
             # In eigenvalue-corrected Shampoo, this is equivalent to computing the eigenvectors of the factor matrix.
             if perform_amortized_computation:
-                self._amortized_computation() 
+                self._amortized_computation()
 
     def _initialize_state_lists(
         self,
@@ -901,122 +895,6 @@ class ShampooPreconditionerList(
     ]
 ):
     """Shampoo preconditioners for list of parameters."""
-
-    def fragmented_state_dict(self, n_parity) -> dict:
-        # Use Reed Solomon coding to fragment state
-        world_size = torch.distributed.world_size()
-        if n_parity == -1:
-            n_parity = world_size
-        _masked_order_list = rs.encode_shard(self._masked_order_list, n_fragments=world_size, nsym=n_parity)
-        _masked_roots_list = rs.encode_shard(self._masked_roots_list, n_fragments=world_size, nsym=n_parity)
-        _masked_preconditioned_dims_selector_list = rs.encode_shard(self._masked_preconditioned_dims_selector_list, n_fragments=world_size, nsym=n_parity)
-        _masked_failed_amortized_computation_counter_list = rs.encode_shard(self._masked_failed_amortized_computation_counter_list, n_fragments=world_size, nsym=n_parity)
-        _bias_correction2 = rs.encode_shard(self._bias_correction2, n_fragments=world_size, nsym=n_parity)
-        _masked_kronecker_factors_list = [rs.encode_shard(self._serialize_kronecker_factors(kf), n_fragments=world_size, nsym=n_parity)
-                                         for kf in self._masked_kronecker_factors_list]
-        """
-        Returns a dictionary representing the complete preconditioner state.
-        This includes the internal lists needed to resume computation exactly where
-        they left off.
-        """
-        state = {
-            "masked_order_list": _masked_order_list,
-            "masked_roots_list": _masked_roots_list,
-            "masked_preconditioned_dims_selector_list": _masked_preconditioned_dims_selector_list,
-            "masked_failed_amortized_computation_counter_list": _masked_failed_amortized_computation_counter_list,
-            "bias_correction2": _bias_correction2,
-            "masked_kronecker_factors_list": _masked_kronecker_factors_list,
-        }
-        return state
-
-    def load_state_dict(self, state: dict) -> None:
-        """
-        Loads the preconditioner state from the provided state dictionary.
-        """
-        self._masked_order_list = state["masked_order_list"]
-        self._masked_roots_list = state["masked_roots_list"]
-        self._masked_preconditioned_dims_selector_list = state["masked_preconditioned_dims_selector_list"]
-        self._masked_failed_amortized_computation_counter_list = state["masked_failed_amortized_computation_counter_list"]
-        self._bias_correction2 = state["bias_correction2"]
-        kronecker_states = state["masked_kronecker_factors_list"]
-        self._local_kronecker_factors_list = tuple(
-            self._deserialize_kronecker_factors(kf_state)
-            for kf_state in kronecker_states
-        )
-        self._masked_kronecker_factors_list = self._local_kronecker_factors_list
-
-    def gather_all_state_dicts(self) -> list:
-        """
-        Gathers the local state dict from each GPU into a list on every GPU.
-        
-        Returns:
-            list: A list where each element is the state dict from one GPU.
-        """
-        world_size = torch.distributed.get_world_size()
-        all_states = [None for _ in range(world_size)]
-        local_state = self.fragmented_state_dict(n_parity=2)
-        torch.distributed.all_gather_object(all_states, local_state)
-        return all_states
-    
-    def broadcast_and_store_others(self) -> tuple[list, list]:
-        """
-        Broadcasts the local state dict to all GPUs, gathers all state dicts,
-        and stores them.
-        """
-        all_states = self.gather_all_state_dicts()
-        # Store in the instance variable (keyed by rank). Only store the states this node did not broadcast.
-        self._gathered_peer_preconditioner_states = {
-            idx: state for idx, state in enumerate(all_states)
-        }
-
-    def update_preconditioners(
-        self,
-        masked_grad_list: tuple[Tensor, ...],
-        step: Tensor,
-        perform_amortized_computation: bool,
-    ) -> None:
-        """
-        Updates the preconditioners.
-
-        Args:
-            masked_grad_list (tuple[Tensor, ...]): A list of gradients with their corresponding masks.
-            step (Tensor): The current step.
-            perform_amortized_computation (bool): Whether to perform an amortized computation.
-
-        Returns:
-            None
-        """
-        with profiler.record_function(
-            f"## {self.__class__.__name__}:{self.update_preconditioners.__name__} ##"
-        ):
-            super().update_preconditioners(
-                masked_grad_list=masked_grad_list,
-                step=step,
-                perform_amortized_computation=perform_amortized_computation,
-            )
-            self.broadcast_and_store_others()
-
-    def _serialize_kronecker_factors(self, kf: ShampooKroneckerFactorsList) -> dict:
-        """
-        Serializes a ShampooKroneckerFactorsList into a dictionary.
-        (Make sure that any tensors are either saved in a device-agnostic way or moved to CPU.)
-        """
-        return {
-            "factor_matrices": [t.cpu() for t in kf.factor_matrices],
-            "inv_factor_matrices": [t.cpu() for t in kf.inv_factor_matrices],
-            "factor_matrix_indices": kf.factor_matrix_indices,
-        }
-
-    def _deserialize_kronecker_factors(self, state: dict) -> ShampooKroneckerFactorsList:
-        """
-        Deserializes the dictionary back into a ShampooKroneckerFactorsList.
-        (You may need to ensure that the tensors are moved to the appropriate device/dtype as needed.)
-        """
-        return ShampooKroneckerFactorsList(
-            factor_matrices=tuple(state["factor_matrices"]),
-            inv_factor_matrices=tuple(state["inv_factor_matrices"]),
-            factor_matrix_indices=tuple(state["factor_matrix_indices"]),
-        )
 
     def _create_kronecker_factors_state_for_block(
         self,

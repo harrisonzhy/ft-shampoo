@@ -1,3 +1,14 @@
+## Setup
+```sh
+source env.sh
+conda create -n "shampoo_env" python==3.11.0
+conda activate shampoo_env
+conda install https://anaconda.org/pytorch/pytorch-cuda/11.8/download/linux-64/pytorch-cuda-11.8-h7e8668a_5.tar.bz2
+```
+```sh
+x-hzhang23@login05.anvil.rcac:[ft-shampoo] $ sinteractive --account=cis240216-gpu --partition=gpu  --time=1:00:00 --gres=gpu:1 --mem-per-gpu=20g --gpus-per-node=1
+```
+
 ## Look at `shampoo_fdsp_distributor.py`
 `shampoo_fdsp_distributor.py` implements `function_()` functions used by `function()` functions in the same file
 as well as base class in `shampoo_distributor.py`, which is `DistributorInterface`.
@@ -482,4 +493,26 @@ def train_fully_shard_model(
             dist.all_reduce(self._global_lifetime_loss, op=dist.ReduceOp.SUM)
         else:
             pass
+```
+
+When checkpointing, you’ll need to save all the components that comprise the internal state of your preconditioner. In this setup, the preconditioner’s state isn’t stored in one monolithic matrix but is distributed over several objects and parameters. Here’s what to capture:
+
+_masked_kronecker_factors_list:
+This list holds objects representing the curvature information for each parameter block. For each element in the list, you should save:
+Factor Matrices: These are the raw accumulated curvature approximations.
+Inverse Factor Matrices (inv_factor_matrices): These matrices are computed in the _amortized_computation step and are used to precondition the gradients.
+Factor Matrix Indices: Any indexing or identification information that helps associate the factor matrices with their corresponding parameters.
+_masked_roots_list:
+This list stores the “root” values for each preconditioner component that dictate the order of the matrix root used during the inverse computation. Preserving these is essential to ensure that when you reload your checkpoint, you compute or use the inverse roots consistently with previous computations.
+Bias Correction Term (e.g., _bias_correction2):
+Since the bias correction is used to adjust the factor matrices before the inversion (and it’s updated on every step if enabled), you must save its current value.
+
+
+Should save these states:
+```
+_masked_kronecker_factors_list
+_masked_order_list
+_masked_roots_list
+_masked_preconditioned_dims_selector_list
+_masked_failed_amortized_computation_counter_list
 ```

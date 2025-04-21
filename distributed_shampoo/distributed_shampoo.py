@@ -1253,3 +1253,6 @@ class DistributedShampoo(torch.optim.Optimizer):
                 param_group_to_load = param_groups_to_load[param_group_key]
                 for key, value in param_group_to_load.items():
                     group[key] = deepcopy(value)
+
+
+
