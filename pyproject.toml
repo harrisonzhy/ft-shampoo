@@ -8,7 +8,7 @@ version = "1.0.0"
 dependencies = [
     "torch>=2.5.0,<2.6",
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 authors = [
   {name = "Hao-Jun Michael Shi"},
   {name = "Tsung-Hsien Lee"},
