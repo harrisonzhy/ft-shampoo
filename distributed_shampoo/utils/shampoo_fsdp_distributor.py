@@ -147,7 +147,7 @@ class FSDPDistributor(DistributorInterface):
         for flattened_param in self._param_group[PARAMS]:
             # Split flattened parameters into valid tensor blocks of the parameter.
             split_params = FSDPDistributor._split_tensor_block_recovery(
-                flattened_param,
+                flattened_param.flatten(),
                 self._param_to_metadata[flattened_param].shape,
                 self._param_to_metadata[flattened_param].start_idx,
                 self._param_to_metadata[flattened_param].end_idx,
@@ -238,7 +238,7 @@ class FSDPDistributor(DistributorInterface):
 
             # Split flattened gradients into valid tensor blocks of the gradient.
             split_grads = FSDPDistributor._split_tensor_block_recovery(
-                flattened_grad,
+                flattened_grad.flatten(),
                 self._param_to_metadata[flattened_param].shape,
                 self._param_to_metadata[flattened_param].start_idx,
                 self._param_to_metadata[flattened_param].end_idx,

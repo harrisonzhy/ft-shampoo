@@ -613,6 +613,8 @@ def train_model(
         metrics._epoch = epoch
         sampler.set_epoch(epoch)  # type: ignore[attr-defined]
 
+        print("Training iterations for this epoch:", len(data_loader))
+        iterations_ = 0
         for inputs, labels in data_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
@@ -626,5 +628,7 @@ def train_model(
             metrics.update_global_metrics()
             if local_rank == 0:
                 metrics.log_global_metrics()
-
+            iterations_ += 1
+            if iterations_ == 5:
+                break
     return metrics._lifetime_loss, metrics._window_loss, metrics._iteration
