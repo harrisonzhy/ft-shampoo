@@ -16,5 +16,10 @@ python -m pip install -r requirements.txt
 Finally, set up the `torch-shampoo` project:
 ```sh
 python -m pip install .
+python -m pip install ".[examples]"
+```
+The training loop can be run like so:
+```
+torchrun --standalone --nnodes=1 --nproc_per_node=$NUM_TRAINERS -m distributed_shampoo.examples.fsdp_cifar10_example --optimizer-type DISTRIBUTED_SHAMPOO --precondition-frequency 100 --grafting-type ADAM --num-trainers-per-group -1 --use-bias-correction --use-decoupled-weight-decay --use-merge-dims
 ```
 
