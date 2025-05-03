@@ -604,6 +604,7 @@ def train_model(
     epochs: int = 1,
     window_size: int = 100,
     local_rank: int = 0,
+    test_mode: bool = False
 ):
     # initialize metrics
     metrics = LossMetrics(window_size=window_size, device=device, world_size=world_size)
@@ -629,6 +630,10 @@ def train_model(
             if local_rank == 0:
                 metrics.log_global_metrics()
             iterations_ += 1
-            if iterations_ == 5:
-                break
+
+            # terminate training early if test mode
+            if test_mode:
+                if iterations_ == 5:
+                    break
     return metrics._lifetime_loss, metrics._window_loss, metrics._iteration
+

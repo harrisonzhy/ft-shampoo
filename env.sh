@@ -25,5 +25,5 @@ export LD_LIBRARY_PATH=$HOME/proj/lapack-3.10.1/:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/apps/anvilgpu/external/apps/cudnn/cuda12.0/8.8.1/lib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=$HOME/proj/ft-shampoo/shampoo_env/lib64/python3.11/site-packages/nvidia/nvjitlink/lib:$LD_LIBRARY_PATH
 
-export PYTHONPATH=/home/x-hzhang23/proj/ft-shampoo:$PYTHONPATH
+export PYTHONPATH=$HOME/proj/ft-shampoo:$PYTHONPATH
 

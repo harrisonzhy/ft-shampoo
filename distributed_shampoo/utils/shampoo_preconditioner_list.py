@@ -802,7 +802,9 @@ class BaseShampooPreconditionerList(
             f"## {self.__class__.__name__}:{self.update_preconditioners.__name__} ##"
         ):
             # Update the Kronecker factor matrices.
-            self._update_factor_matrices(masked_grad_list=masked_grad_list)
+            # skip factor updates if no grads were passed in
+            if masked_grad_list:
+                self._update_factor_matrices(masked_grad_list=masked_grad_list)
 
             # Update bias correction term based on step.
             if self._use_bias_correction and self._beta2 < 1.0:
