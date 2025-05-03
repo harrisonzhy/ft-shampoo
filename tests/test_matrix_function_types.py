@@ -1,6 +1,8 @@
 import re
 import unittest
 
+from dataclasses import dataclass, field, fields
+
 import torch
 
 from commons import get_all_subclasses, AbstractDataclass
@@ -177,21 +179,20 @@ class OtherConfigsDefaultsTest(unittest.TestCase):
         self.assertTrue(cfg.disable_tf32)
 
 class AbstractBaseInstantiationTest(unittest.TestCase):
-    def test_matrixfunctionconfig_instantiates(self):
-        # Under the shim, MatrixFunctionConfig now uses AbstractDataclass.__init__, so it can be constructed
-        cfg = MatrixFunctionConfig()
-        self.assertIsInstance(cfg, MatrixFunctionConfig)
+    def test_matrixfunctionconfig_abstract(self):
+        # MatrixFunctionConfig remains abstract and should not instantiate
+        with self.assertRaises(TypeError):
+            MatrixFunctionConfig()
 
-    def test_eigendecompositionconfig_instantiates(self):
-        # Under the shim, this is now concrete and should instantiate
-        cfg = EigendecompositionConfig()
-        self.assertIsInstance(cfg, EigendecompositionConfig)
+    def test_eigendecompositionconfig_abstract(self):
+        # EigendecompositionConfig remains abstract and should not instantiate
+        with self.assertRaises(TypeError):
+            EigendecompositionConfig()
 
-    def test_rootinvconfig_instantiates(self):
-        # Under the shim, RootInvConfig is concrete and should instantiate
-        cfg = RootInvConfig()
-        self.assertIsInstance(cfg, RootInvConfig)
-
+    def test_rootinvconfig_abstract(self):
+        # RootInvConfig is still abstract and should not instantiate
+        with self.assertRaises(TypeError):
+            RootInvConfig()
 
 class EighEigendecompositionConfigOverrideTest(unittest.TestCase):
     def test_override_retry_and_device(self):
@@ -251,31 +252,35 @@ class RootInvOverrideTest(unittest.TestCase):
         self.assertFalse(cfg.disable_tf32)
 
 class KwOnlyEnforcementTest(unittest.TestCase):
-    def test_eigh_positional_args(self):
-        # Under the shim, EighEigendecompositionConfig accepts positional args:
-        #   (retry_double_precision, eigendecomposition_offload_device)
-        cfg = EighEigendecompositionConfig(True, "cpu")
-        self.assertIsInstance(cfg, EighEigendecompositionConfig)
-        self.assertTrue(cfg.retry_double_precision)
-        # the string is converted into a torch.device
-        self.assertEqual(cfg.eigendecomposition_offload_device, torch.device("cpu"))
-
-    def test_qr_kw_only(self):
-        # QREigendecompositionConfig is kw_only
-        cfg = QREigendecompositionConfig(5, 0.01)
+    def test_qr_keyword_only(self):
+        # QREigendecompositionConfig must be called with keyword arguments
+        cfg = QREigendecompositionConfig(
+            max_iterations=5,
+            tolerance=0.01,
+        )
         self.assertIsInstance(cfg, QREigendecompositionConfig)
         self.assertEqual(cfg.max_iterations, 5)
         self.assertEqual(cfg.tolerance, 0.01)
 
+    def test_qr_positional_args_unsupported(self):
+        # Calling with positional args should raise a TypeError
+        with self.assertRaises(TypeError):
+            QREigendecompositionConfig(5, 0.01)
 
-    def test_eigenconfig_kw_only(self):
-        # EigenConfig inherits kw_only=True
-        cfg = EighEigendecompositionConfig(True, "cpu")
+    def test_eigh_kw_only(self):
+        # EighEigendecompositionConfig must be called with keywords
+        cfg = EighEigendecompositionConfig(
+            retry_double_precision=True,
+            eigendecomposition_offload_device="cpu",
+        )
         self.assertIsInstance(cfg, EighEigendecompositionConfig)
         self.assertTrue(cfg.retry_double_precision)
-        # string “cpu” should be converted to torch.device("cpu")
         self.assertEqual(cfg.eigendecomposition_offload_device, torch.device("cpu"))
 
+    def test_eigh_positional_args_unsupported(self):
+        # positional args should not be accepted
+        with self.assertRaises(TypeError):
+            EighEigendecompositionConfig(True, "cpu")
 
 class GetAllSubclassesBehaviorTest(unittest.TestCase):
     def test_no_duplicates_in_subclasses(self):

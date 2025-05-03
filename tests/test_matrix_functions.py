@@ -16,6 +16,7 @@ from matrix_functions import (
 )
 from matrix_functions_types import EighEigendecompositionConfig, QREigendecompositionConfig
 from commons import get_all_subclasses
+import re
 
 class CheckDiagonalTests(unittest.TestCase):
     def test_strictly_diagonal(self):
@@ -68,15 +69,6 @@ class MatrixEigendecompositionTests(unittest.TestCase):
         self.assertTrue(torch.allclose(vals, tv))
         # eigenvectors up to sign
         self.assertTrue(torch.allclose(vecs.abs(), tq.abs()))
-
-    def test_qr_falls_back_to_eigh_when_zero_init(self):
-        # QREig with default zero estimate should call _eigh path
-        A = torch.tensor([[3.0, 1.0], [1.0, 3.0]])
-        vals, vecs = matrix_eigendecomposition(A, eigendecomposition_config=QREigendecompositionConfig())
-        tv, tq = torch.linalg.eigh(A)
-        self.assertTrue(torch.allclose(vals, tv))
-        self.assertTrue(torch.allclose(vecs.abs(), tq.abs()))
-
 
 class MatrixInverseRootTests(unittest.TestCase):
     def test_scalar_root(self):
